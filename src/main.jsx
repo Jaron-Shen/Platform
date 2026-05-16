@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Bot,
   CalendarDays,
+  CheckCircle2,
   ChevronRight,
   ClipboardList,
   HeartHandshake,
@@ -12,6 +13,7 @@ import {
   Phone,
   Pill,
   Plus,
+  ScanFace,
   ShieldCheck,
   Sparkles,
   Stethoscope,
@@ -116,19 +118,129 @@ const profileSections = [
 
 function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [authPhase, setAuthPhase] = useState("verifying");
+  const [showFaceIdModal, setShowFaceIdModal] = useState(false);
+
+  useEffect(() => {
+    if (authPhase === "verifying") {
+      const successTimer = window.setTimeout(() => {
+        setAuthPhase("success");
+      }, 2000);
+
+      return () => {
+        window.clearTimeout(successTimer);
+      };
+    }
+
+    if (authPhase === "success") {
+      const dashboardTimer = window.setTimeout(() => {
+        setAuthPhase("authenticated");
+        setActiveTab("dashboard");
+      }, 1000);
+
+      return () => {
+        window.clearTimeout(dashboardTimer);
+      };
+    }
+
+    return undefined;
+  }, [authPhase]);
+
+  function handleUseFaceId() {
+    setShowFaceIdModal(true);
+  }
 
   return (
     <div className="page-shell">
       <main className="phone-frame" aria-label="Healthcare app mobile prototype">
-        <Header activeTab={activeTab} />
-        <section className="screen-content">
-          {activeTab === "dashboard" && <Dashboard />}
-          {activeTab === "caregivers" && <CaregiverAccess />}
-          {activeTab === "assistant" && <AIAssistant />}
-          {activeTab === "profile" && <Profile />}
-        </section>
-        <BottomNav activeTab={activeTab} onChange={setActiveTab} />
+        {authPhase !== "authenticated" ? (
+          <AuthScreen phase={authPhase} />
+        ) : (
+          <>
+            <Header activeTab={activeTab} />
+            <section className="screen-content">
+              {activeTab === "dashboard" && <Dashboard />}
+              {activeTab === "caregivers" && <CaregiverAccess />}
+              {activeTab === "assistant" && <AIAssistant />}
+              {activeTab === "profile" && <Profile onUseFaceId={handleUseFaceId} />}
+            </section>
+            <BottomNav activeTab={activeTab} onChange={setActiveTab} />
+            {showFaceIdModal && (
+              <FaceIdModal onComplete={() => setShowFaceIdModal(false)} />
+            )}
+          </>
+        )}
       </main>
+    </div>
+  );
+}
+
+function AuthScreen({ phase }) {
+  return (
+    <section className="auth-screen" aria-live="polite">
+      <p className="eyebrow">CareCircle Health</p>
+      <FaceIdAnimation phase={phase} />
+      <div className="auth-copy">
+        <h1>{phase === "success" ? "Identity verified" : "Verifying identity..."}</h1>
+        <p>
+          {phase === "success"
+            ? "Thank you. Opening your health dashboard now."
+            : "Please hold still while we check your secure access."}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function FaceIdModal({ onComplete }) {
+  const [phase, setPhase] = useState("verifying");
+
+  useEffect(() => {
+    const successTimer = window.setTimeout(() => {
+      setPhase("success");
+    }, 2000);
+
+    const closeTimer = window.setTimeout(() => {
+      onComplete();
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(successTimer);
+      window.clearTimeout(closeTimer);
+    };
+  }, [onComplete]);
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-live="polite">
+      <div className="face-id-modal">
+        <FaceIdAnimation phase={phase} compact />
+        <h2>{phase === "success" ? "Identity verified" : "Verifying identity..."}</h2>
+        <p>
+          {phase === "success"
+            ? "Your profile access has been confirmed."
+            : "This is a frontend demo using mock authentication."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FaceIdAnimation({ phase, compact = false }) {
+  const isSuccess = phase === "success";
+
+  return (
+    <div className={`face-id-wrap ${compact ? "compact" : ""} ${isSuccess ? "success" : ""}`}>
+      <div className="face-id-glow" />
+      <div className="face-id-orb">
+        {isSuccess ? (
+          <CheckCircle2 size={compact ? 58 : 78} strokeWidth={1.8} />
+        ) : (
+          <>
+            <ScanFace size={compact ? 62 : 86} strokeWidth={1.7} />
+            <span className="scan-line" />
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -217,7 +329,7 @@ function CaregiverCard({ caregiver }) {
       <div className="caregiver-header">
         <div>
           <h2>{caregiver.name}</h2>
-          <p>{caregiver.role} - {caregiver.status}</p>
+          <p>{caregiver.role} · {caregiver.status}</p>
         </div>
         <button className="text-button" type="button">Edit</button>
       </div>
@@ -279,7 +391,7 @@ function AIAssistant() {
   );
 }
 
-function Profile() {
+function Profile({ onUseFaceId }) {
   return (
     <div className="stack">
       <Card className="profile-card">
@@ -287,10 +399,15 @@ function Profile() {
         <div>
           <p className="section-label">Older adult profile</p>
           <h2>{mockUser.name}</h2>
-          <p>Age {mockUser.age} - ID {mockUser.healthId}</p>
+          <p>Age {mockUser.age} · ID {mockUser.healthId}</p>
           <p>Primary doctor: {mockUser.primaryDoctor}</p>
         </div>
       </Card>
+
+      <button className="primary-action face-id-action" type="button" onClick={onUseFaceId}>
+        <ScanFace size={24} />
+        Use Face ID
+      </button>
 
       {profileSections.map((section) => (
         <Card key={section.title}>
